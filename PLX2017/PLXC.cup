@@ -1,0 +1,380 @@
+import java_cup.runtime.*;
+import java.util.ArrayList;
+import java.util.List;
+
+action code{:
+
+//Para la declaracion de los arrays
+  String arDec="";
+  int arDecUSe=0;
+  String arDecTemp="";
+
+//Para el uso del operador ternario
+  String askTemptp="";
+
+//Para la sentencia switch
+  String swtVar="";
+  DoubleTag swtDTag;
+  boolean firstCase=true;
+  String swtFTag="";
+
+//Para los punteros
+  int pointerLevel=0;
+  int pointerUse=0;
+  :}
+
+/*Terminales*/
+terminal PRINT, PYC, AP, CP, ALL, CLL, COMA, AC, CC, DP;
+terminal MAS, MENOS, POR, DIV, ASIG, MENOSUNARIO, MASMAS, MENOSMENOS, MOD;
+terminal MASEQ, MENOSEQ, POREQ, DIVEQ;
+terminal IF, ELSE, SWITCH, CASE, BREAK, DEFAULT, ASK;
+terminal FOR, WHILE, DO, TO, DOWNTO, STEP;
+terminal OR, AND, NOT, LT, LEQ, GT, GEQ, EQ, NEQ;
+terminal INT, FLOAT;
+terminal COMMENT;
+terminal ELVIS;
+terminal AMP;
+
+//terminal CASTINT, CASTFLOAT;
+terminal String IDENT, NUM, RNUM;
+
+/*No terminales*/
+non terminal String List_sent, sent, exp, part_else, List_var_dec, type, variable, idExp, prStep;
+non terminal String varOrNum, arrayInit, arExp, moreDim, prDp, List_switch, op_default;
+non terminal String switchSent, dec_pointer, pointer, op_sent;
+non terminal DoubleTag cond, prWhile, prDo, prFor, prAsk, prElvis, prSwitch, op_break;
+
+
+/*Precedencias*/
+//precedence left QUEST;
+precedence right ASIG, MASEQ, MENOSEQ, POREQ, DIVEQ;
+precedence left PRINT;
+precedence right ASK;
+precedence left OR, AND;
+precedence left EQ,NEQ;
+precedence left LT, LEQ, GT, GEQ;
+precedence right ELVIS;
+precedence left MAS, MENOS;
+precedence left MOD,DIV, POR;
+precedence left MENOSUNARIO, MASMAS,MENOSMENOS, NOT;
+precedence left NUM,IDENT;
+precedence left IF,ELSE,AP,ALL,CC;
+
+
+/*Gramatica*/
+
+List_sent   ::= List_sent sent
+            |
+            ;
+
+sent        ::= exp PYC
+            | List_var_dec PYC
+            | PRINT AP exp:e CP PYC           {:Generator.GenPrint(e); :}
+            | ALL                             {:TS.newBlock(); :}
+              List_sent CLL                   {:TS.oldBlock(); :}
+            | IF AP cond:c CP                 {:Generator.GenLabel(c.getV()); :}
+              sent                            {:c.setV(c.getF());
+                                                c.setF(DoubleTag.newTag());
+                                                Generator.GenGoto(c.getF());
+                                                Generator.GenLabel(c.getV()); :}
+              part_else                       {:Generator.GenLabel(c.getF()); :}
+            | prWhile:aux                     {:Generator.GenLabel(aux.getV()); :}
+              AP cond:c CP                    {:Generator.GenLabel(c.getV()); :}
+              sent                            {:Generator.GenGoto(aux.getV());
+                                                Generator.GenLabel(c.getF()); :}
+            | prDo:aux                        {:Generator.GenLabel(aux.getV()); :}
+              sent WHILE AP cond:c CP PYC     {:Generator.GenLabel(c.getV());
+                                                Generator.GenGoto(aux.getV());
+                                                Generator.GenLabel(c.getF()); :}
+            | prFor:aux AP exp:e1             {:Generator.GenLabel(aux.getV()); :}
+              PYC cond:c                      {:Generator.GenLabel(aux.getF()); :}
+              PYC exp:e2 CP                   {:Generator.GenGoto(aux.getV());
+                                                Generator.GenLabel(c.getV()); :}
+              sent                            {:Generator.GenGoto(aux.getF());
+                                                Generator.GenLabel(c.getF()); :}
+            | prFor:aux exp:e1 TO  exp:e2
+              prStep:step prDo:aux2           {:Generator.GenLabel(aux.getV());
+                                                Generator.GenCondForDownTo(e1,e2,aux2,false);
+                                                Generator.GenLabel(aux.getF());
+                                                Generator.GenBinOper(e1,Generator.MAS,step,e1);
+                                                Generator.GenGoto(aux.getV());
+                                                Generator.GenLabel(aux2.getV()); :}
+              ALL sent CLL                    {:Generator.GenGoto(aux.getF());
+                                                Generator.GenLabel(aux2.getF()); :}
+            | prFor:aux exp:e1 DOWNTO exp:e2
+              prStep:step prDo:aux2           {:Generator.GenLabel(aux.getV());
+                                                Generator.GenCondForDownTo(e1,e2,aux2,true);
+                                                Generator.GenLabel(aux.getF());
+                                                Generator.GenBinOper(e1,Generator.MENOS,step,e1);
+                                                Generator.GenGoto(aux.getV());
+                                                Generator.GenLabel(aux2.getV()); :}
+              ALL sent CLL                     {:Generator.GenGoto(aux.getF());
+                                                 Generator.GenLabel(aux2.getF()); :}
+            | COMMENT                          {::}
+            | switchSent
+
+            ;
+
+part_else   ::= ELSE sent
+            |
+            ;
+
+prWhile     ::= WHILE                           {:RESULT=new DoubleTag(); :}
+            ;
+
+prDo        ::= DO                              {:RESULT=new DoubleTag(); :}
+            ;
+
+prFor       ::= FOR                             {:RESULT=new DoubleTag(); :}
+            ;
+
+prStep      ::= STEP exp:e                      {:RESULT=e; :}
+            |                                   {:RESULT="1"; :}
+            ;
+
+
+List_var_dec    ::= type:tp                     {:TS.auxType=tp; :}
+                    variable
+                  | List_var_dec COMA variable
+                  ;
+
+variable    ::= IDENT:id                         {:if(TS.isDeclared(id,true)){
+                                                   TS.error(1);
+                                                   }else{
+                                                     TS.add(id,TS.auxType,false,"0",false,0);
+                                                     RESULT=id;
+                                                   } :}
+            | IDENT:id ASIG exp:e                {:if(TS.isDeclared(id,true)){
+                                                    TS.error(1);
+                                                    }else{
+                                                      TS.add(id,TS.auxType,false,"0",false,0);
+                                                      RESULT=Generator.GenAsig(TS.varBlock(id),e);
+                                                    }  :}
+            | IDENT:id AC varOrNum:vn CC moreDim:d{:if(Generator.seeType(vn)==1){
+                                                     TS.error(0);
+                                                   }
+                                                   if(TS.isDeclared(id,true)){
+                                                   TS.error(1);
+                                                   }else{
+                                                    TS.add(id,TS.auxType,true,vn,false,0);
+                                                    RESULT=id;
+                                                    arDec=id;
+                                                    arDecUSe=0;
+                                                   } :}
+              arrayInit                            {:PLXC.out.println("   $"+id+"_length = "+vn+";"); :}
+            | dec_pointer
+            ;
+
+
+moreDim     ::= AC varOrNum:vn CC moreDim       {::}
+            |
+            ;
+
+arrayInit   ::= ASIG                            {:arDecTemp=Generator.newTag(TS.auxType); :}
+                ALL arExp CLL                   {:String temp2=Generator.newTag(TS.auxType);
+                                                  Generator.GenInitArrayPart2(arDecTemp,temp2,arDec,arDecUSe,false); :}
+            |
+            ;
+
+arExp       ::= arExp COMA exp:e                {:Generator.GenInitArray(arDec,arDecTemp,arDecUSe,e);
+                                                  arDecUSe++; :}
+            | exp:e                             {:Generator.GenInitArray(arDec,arDecTemp,arDecUSe,e);
+                                                  arDecUSe++; :}
+            ;
+
+type        ::= INT                             {:RESULT="INTEGER"; :}
+            | FLOAT                             {:RESULT="FLOAT"; :}
+            ;
+
+
+exp         ::= exp:e1 MAS exp:e2               {:String temp = Generator.newTag("");
+                                                  Generator.GenBinOper(e1,Generator.MAS,e2,temp);
+                                                  RESULT=temp; :}
+            | exp:e1 MENOS exp:e2               {:String temp = Generator.newTag("");
+                                                  Generator.GenBinOper(e1,Generator.MENOS,e2,temp);
+                                                  RESULT=temp; :}
+            | exp:e1 POR exp:e2                 {:String temp = Generator.newTag("");
+                                                  Generator.GenBinOper(e1,Generator.POR,e2,temp);
+                                                  RESULT=temp; :}
+            | exp:e1 DIV exp:e2                 {:String temp = Generator.newTag("");
+                                                  Generator.GenBinOper(e1,Generator.DIV,e2,temp);
+                                                  RESULT=temp; :}
+            | exp:e1 MOD exp:e2                 {:String temp = Generator.newTag("");
+                                                  RESULT=Generator.GenBinOper(e1,Generator.MOD,e2,temp); :}
+            | MENOS exp:e                       {:String temp = Generator.newTag("");
+                                                  Generator.GenBinOper(null,Generator.MENOSUNARIO,e,temp);
+                                                  RESULT=temp; :}%prec MENOSUNARIO
+            | idExp:id ASIG exp:e               {:RESULT=Generator.GenAsig(TS.varBlock(id),e); :}
+            | AP exp:e CP                       {:RESULT=e; :}
+            | idExp:id                          {:RESULT=id; :}
+            | MASMAS idExp:id                   {:RESULT=Generator.GenIncDec(TS.varBlock(id),true,true); :}
+            | idExp:id MASMAS                   {:RESULT=Generator.GenIncDec(TS.varBlock(id),false,true); :}
+            | MENOSMENOS idExp:id               {:RESULT=Generator.GenIncDec(TS.varBlock(id),true,false); :}
+            | idExp:id MENOSMENOS               {:RESULT=Generator.GenIncDec(TS.varBlock(id),false,false); :}
+            | NUM:n                             {:RESULT=n; :}
+            | RNUM:rn                           {:RESULT=rn; :}
+            | idExp:id AC exp:e CC              {:String temp = Generator.newTag("");
+                                                  Generator.GenUseVarArray(id,e,temp);
+                                                  RESULT=temp;:}
+            | idExp:id AC exp:e1 CC ASIG exp:e2 {:Generator.GenAsigArray(id,e1,e2); :}
+            | idExp:id ASIG                     {:Node nod =TS.getNode(id);
+                                                    if(!nod.getIsArray()){
+                                                      TS.error(3);
+                                                      }else{
+                                                        arDec=id;
+                                                        arDecUSe=0;
+                                                        }
+                                                arDecTemp=Generator.newTag(TS.auxType); :}
+              ALL arExp CLL                     {:String temp2=Generator.newTag(TS.auxType);
+                                                  Generator.GenInitArrayPart2(arDecTemp,temp2,arDec,arDecUSe,true);
+                                                  RESULT=id; :}
+            | varOrNum:vn MASEQ exp:e           {:Generator.GenUnicOper(vn,Generator.MASEQ,e);
+                                                  RESULT=vn;:}
+            | varOrNum:vn MENOSEQ exp:e         {:Generator.GenUnicOper(vn,Generator.MENOSEQ,e);
+                                                  RESULT=vn;:}
+            | varOrNum:vn POREQ exp:e           {:Generator.GenUnicOper(vn,Generator.POREQ,e);
+                                                  RESULT=vn;:}
+            | varOrNum:vn DIVEQ exp:e           {:Generator.GenUnicOper(vn,Generator.DIVEQ,e);
+                                                  RESULT=vn;:}
+            | cond:c prAsk:a                    {:Generator.GenLabel(c.getV()); :}
+              exp:e1                            {:askTemptp=Generator.basicType(e1);:}
+              prDp:dp                           {:Generator.GenAsig(dp,e1);
+                                                  Generator.GenGoto(a.getV());
+                                                  Generator.GenLabel(c.getF()); :}
+              exp:e2                            {:Generator.GenAsig(dp,e2);
+                                                  Generator.GenLabel(a.getV());
+                                                  RESULT=dp; :}
+            | exp:e1 prElvis:ev                 {:RESULT=Generator.newTag(Generator.basicType(e1));
+                                                  Generator.GenAsig(RESULT,e1);
+                                                  PLXC.out.println("   if ("+e1+" != 0) goto "+ev.getV()+";"); :}
+              exp:e2                            {:Generator.GenAsig(RESULT,e2);
+                                                  Generator.GenLabel(ev.getV()); :}
+            | pointer:pt ASIG exp:e             {:RESULT=Generator.GenPointAsig(pt,e);
+                                                  pointerUse=0;:}
+            | idExp:id ASIG AMP varOrNum:vn     {:if(Generator.seeType(vn)<=2){
+                                                    RESULT=Generator.GenAmpPoint(id,vn,true,0);
+                                                  }else{
+                                                    TS.error(0);
+                                                    }:}
+            | pointer:pt ASIG AMP varOrNum:vn   {:if(Generator.seeType(vn)<=2){
+                                                    RESULT=Generator.GenAmpPoint(pt,vn,false,pointerUse);
+                                                    pointerUse=0;
+                                                  }else{
+                                                    TS.error(0);
+                                                    }:}
+            | pointer:pt                      {:RESULT=Generator.GenPointer(pt); :}
+
+            ;
+
+prAsk       ::= ASK                             {:RESULT=new DoubleTag(); :}
+            ;
+
+prDp        ::= DP                              {:RESULT=Generator.newTag(askTemptp); :}
+            ;
+
+prElvis     ::= ELVIS                             {:RESULT=new DoubleTag(); :}
+            ;
+
+idExp       ::= IDENT:id                        {:if(!TS.isDeclared(id,false)){
+                                                   TS.error(2);
+                                                 }else{
+                                                   RESULT=TS.varBlock(id);
+                                                 } :}
+            ;
+
+varOrNum    ::= IDENT:id                        {:if(!TS.isDeclared(id,false)){
+                                                    TS.error(2);
+                                                  }else{
+                                                    RESULT=TS.varBlock(id);
+                                                  } :}
+            | NUM:n                             {:RESULT=n; :}
+            ;
+
+cond        ::= exp:e1 LT exp:e2                {:RESULT=Generator.GenCond(e1,Generator.LT,e2); :}
+            | exp:e1 LEQ exp:e2                 {:RESULT=Generator.GenCond(e1,Generator.LEQ,e2); :}
+            | exp:e1 EQ exp:e2                  {:RESULT=Generator.GenCond(e1,Generator.EQ,e2); :}
+            | exp:e1 GEQ exp:e2                 {:RESULT=Generator.GenCond(e1,Generator.GEQ,e2); :}
+            | exp:e1 GT exp:e2                  {:RESULT=Generator.GenCond(e1,Generator.GT,e2); :}
+            | exp:e1 NEQ exp:e2                 {:RESULT=Generator.GenCond(e1,Generator.NEQ,e2); :}
+            | NOT cond:c                        {:String aux = c.getV();
+                                                  c.setV(c.getF());
+                                                  c.setF(aux);
+                                                  RESULT=c; :}
+            | cond:c1 AND                       {:Generator.GenLabel(c1.getV()); :}
+              cond:c2                           {:Generator.GenLabel(c1.getF());
+                                                  Generator.GenGoto(c2.getF());
+                                                  RESULT=c2; :}
+            | cond:c1 OR                        {:Generator.GenLabel(c1.getF()); :}
+              cond:c2                           {:Generator.GenLabel(c1.getV());
+                                                  Generator.GenGoto(c2.getV());
+                                                  RESULT=c2; :}
+            | AP cond:c CP                      {:RESULT=c; :}
+            ;
+
+
+//Codigo para el Switch
+switchSent  ::= prSwitch:sw AP exp:e1 CP         {:swtVar=e1;
+                                                  swtDTag=sw; :}
+                ALL List_switch op_default CLL
+            ;
+
+List_switch ::= CASE exp:n                     {:if(!firstCase){
+                                                   Generator.GenLabel(swtDTag.getV());
+                                                   swtDTag.setV(swtDTag.getF());
+                                                   DoubleTag.updateTag(swtDTag,false);
+                                                   Generator.GenCase(swtVar,n,swtDTag);
+                                                   Generator.GenLabel(swtDTag.getV());
+                                                   }else{
+                                                     swtFTag=swtDTag.getV();
+                                                     firstCase=false;
+                                                     Generator.GenCase(swtVar,n,swtDTag);
+                                                   }  :}
+                DP op_sent op_break
+            | List_switch CASE                  {:Generator.GenLabel(swtDTag.getV()); :}
+              exp:n                             {:swtDTag.setV(swtDTag.getF());
+                                                 DoubleTag.updateTag(swtDTag,false);
+                                                 Generator.GenCase(swtVar,n,swtDTag);
+                                                 Generator.GenLabel(swtDTag.getV()); :}
+              DP op_sent op_break
+            ;
+
+
+op_default  ::= DEFAULT DP                      {:Generator.GenLabel(swtDTag.getV());
+                                                  Generator.GenLabel(swtDTag.getF());:}
+                sent                            {:Generator.GenLabel(swtFTag); :}
+            |                                   {:Generator.GenLabel(swtFTag);:}
+            ;
+
+op_break    ::= BREAK PYC                       {:swtDTag.setV(swtDTag.getF());
+                                                  DoubleTag.updateTag(swtDTag,false);
+                                                  Generator.GenGoto(swtFTag); :}
+            |                                   {:swtDTag.setV(swtDTag.getF());
+                                                  DoubleTag.updateTag(swtDTag,false);
+                                                  Generator.GenGoto(swtDTag.getF()); :}
+            ;
+
+op_sent     ::= sent
+            |
+            ;
+
+prSwitch    ::= SWITCH                          {:RESULT=new DoubleTag(); firstCase=true; :}
+            ;
+
+//Codigo para los punteros
+
+dec_pointer ::= POR IDENT:id                    {:pointerLevel+=1;
+                                                  if(TS.isDeclared(id,false)){
+                                                    TS.error(1);
+                                                    }else{
+                                                      TS.add(id,TS.auxType,false,"0",true,pointerLevel);
+                                                      pointerLevel=0;
+                                                      RESULT=id;
+                                                      }:}
+            | POR                               {:pointerLevel+=1; :}
+              dec_pointer
+            ;
+pointer     ::= POR idExp:id                    {:pointerUse+=1;
+                                                  RESULT=id; :}
+            | POR                               {:pointerUse+=1; :}
+              pointer:pt                        {:RESULT=pt; :}
+            ;

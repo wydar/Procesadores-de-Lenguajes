@@ -1,0 +1,30 @@
+   x = 2;
+   y = x;
+   $t0 = x + x;
+   $t1 = $t0 / 2;
+   if ($t1 != 1) goto L1;
+   $t2 = y + 1;
+   y = $t2;
+   goto L2;
+L1:
+   $t3 = 1 + 1;
+   if ($t1 != $t3) goto L3;
+L2:
+   $t4 = y + 2;
+   y = $t4;
+   goto L4;
+L3:
+   $t5 = 1 + 2;
+   $t6 = $t5 + 3;
+   if ($t1 != $t6) goto L5;
+L4:
+   $t7 = y + 3;
+   y = $t7;
+   goto L0;
+L5:
+L6:
+   $t8 = y + 10;
+   y = $t8;
+L0:
+   $t9 = x * y;
+   print $t9;

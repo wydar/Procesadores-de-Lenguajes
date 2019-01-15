@@ -1,0 +1,3 @@
+jflex PYPL.flex
+cup PYPL.cup
+javac *.java

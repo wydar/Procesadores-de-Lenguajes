@@ -1,0 +1,75 @@
+import java_cup.runtime.*;
+
+/*Terminales*/
+terminal PRINT, PYC, AP, CP, ALL, CLL;
+terminal MAS, MENOS, POR, DIV, ASIG, MENOSUNARIO;
+terminal IF, ELSE, SWITCH, CASE, BREAK;
+terminal FOR, WHILE, DO;
+terminal OR, AND, NOT, LT, LEQ, GT, GEQ, EQ, NEQ;
+terminal String IDENT, NUM;
+
+/*No terminales*/
+non terminal String List_sent, sent, exp, part_else;
+non terminal DoubleTag cond;
+
+
+/*Precedencias*/
+precedence left OR, AND;
+precedence left MAS, MENOS;
+precedence left DIV, POR;
+precedence left MENOSUNARIO;
+
+
+/*Gramatica*/
+
+List_sent   ::= List_sent sent
+            |
+            ;
+
+sent        ::= exp PYC
+            | PRINT AP exp:e CP PYC           {:Generator.GenPrint(e); :}
+            | ALL List_sent CLL
+            | IF AP cond:c CP                 {:Generator.GenLabel(c.getV()); :}
+              sent                            {:c.setV(c.getF());
+                                                c.setF(DoubleTag.newTag());
+                                                Generator.GenGoto(c.getF());
+                                                Generator.GenLabel(c.getV());
+                                                Generator.GenLabel(c.getF()); :}
+             part_else
+            ;
+
+part_else   ::= sent
+            |
+            ;
+
+exp         ::= exp:e1 MAS exp:e2               {:RESULT=Generator.GenBinOper(e1,Generator.MAS,e2); :}
+            | exp:e1 MENOS exp:e2               {:RESULT=Generator.GenBinOper(e1,Generator.MENOS,e2); :}
+            | exp:e1 POR exp:e2                 {:RESULT=Generator.GenBinOper(e1,Generator.POR,e2); :}
+            | exp:e1 DIV exp:e2                 {:RESULT=Generator.GenBinOper(e1,Generator.DIV,e2); :}
+            | MENOS exp:e                       {:RESULT=Generator.GenBinOper(null,Generator.MENOSUNARIO,e); :}%prec MENOSUNARIO
+            | IDENT:id ASIG exp:e               {:RESULT=Generator.GenAsig(id,e); :}
+            | AP exp:e CP                       {:RESULT=e; :}
+            | IDENT:id                          {:RESULT=id; :}
+            | NUM:n                             {:RESULT=n; :}
+            ;
+
+cond        ::= exp:e1 LT exp:e2                {:RESULT=Generator.GenCond(e1,Generator.LT,e2); :}
+            | exp:e1 LEQ exp:e2                 {:RESULT=Generator.GenCond(e1,Generator.LEQ,e2); :}
+            | exp:e1 EQ exp:e2                  {:RESULT=Generator.GenCond(e1,Generator.EQ,e2); :}
+            | exp:e1 GEQ exp:e2                 {:RESULT=Generator.GenCond(e1,Generator.GEQ,e2); :}
+            | exp:e1 GT exp:e2                  {:RESULT=Generator.GenCond(e1,Generator.GT,e2); :}
+            | exp:e1 NEQ exp:e2                 {:RESULT=Generator.GenCond(e1,Generator.NEQ,e2); :}
+            | NOT cond:c                        {:String aux = c.getV();
+                                                  c.setV(c.getF());
+                                                  c.setF(aux);
+                                                  RESULT=c; :}
+            | cond:c1 AND                       {:Generator.GenLabel(c1.getV()); :}
+              cond:c2                           {:Generator.GenLabel(c1.getF());
+                                                  Generator.GenGoto(c2.getF());
+                                                  RESULT=c2; :}
+            | cond:c1 OR                        {:Generator.GenLabel(c1.getF()); :}
+              cond:c2                           {:Generator.GenLabel(c1.getV());
+                                                  Generator.GenGoto(c2.getV());
+                                                  RESULT=c2; :}
+            | AP cond:c CP                      {:RESULT=c; :}
+            ;

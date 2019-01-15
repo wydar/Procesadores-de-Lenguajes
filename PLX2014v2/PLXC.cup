@@ -1,0 +1,175 @@
+import java_cup.runtime.*;
+
+/*Terminales*/
+terminal PRINT, PYC, AP, CP, ALL, CLL, COMA;
+terminal MAS, MENOS, POR, DIV, ASIG, MENOSUNARIO, MASMAS, MENOSMENOS, MOD;
+terminal IF, ELSE, SWITCH, CASE, BREAK;
+terminal FOR, WHILE, DO, TO, DOWNTO, STEP;
+terminal OR, AND, NOT, LT, LEQ, GT, GEQ, EQ, NEQ;
+terminal INT;
+terminal String IDENT, NUM;
+
+/*No terminales*/
+non terminal String List_sent, sent, exp, part_else, List_var_dec, type, variable, idExp, prStep;
+non terminal DoubleTag cond, prWhile, prDo, prFor;
+non terminal Integer BinOper;
+
+
+/*Precedencias*/
+precedence left PRINT;
+precedence left OR, AND;
+precedence left MAS, MENOS;
+precedence left MOD,DIV, POR;
+precedence left MENOSUNARIO;
+precedence left NUM,IDENT;
+precedence left IF,ELSE,AP,ALL;
+
+
+/*Gramatica*/
+
+List_sent   ::= List_sent sent
+            |
+            ;
+
+sent        ::= exp PYC
+            | List_var_dec PYC
+            | PRINT AP exp:e CP PYC           {:Generator.GenPrint(e); :}
+            | ALL                             {:TS.newBlock(); :}
+              List_sent CLL                   {:TS.oldBlock(); :}
+            | IF AP cond:c CP                 {:Generator.GenLabel(c.getV()); :}
+              sent                            {:c.setV(c.getF());
+                                                c.setF(DoubleTag.newTag());
+                                                Generator.GenGoto(c.getF());
+                                                Generator.GenLabel(c.getV()); :}
+              part_else                       {:Generator.GenLabel(c.getF()); :}
+            | prWhile:aux                     {:Generator.GenLabel(aux.getV()); :}
+              AP cond:c CP                    {:Generator.GenLabel(c.getV()); :}
+              sent                            {:Generator.GenGoto(aux.getV());
+                                                Generator.GenLabel(c.getF()); :}
+            | prDo:aux                        {:Generator.GenLabel(aux.getV()); :}
+              sent WHILE AP cond:c CP PYC     {:Generator.GenLabel(c.getV());
+                                                Generator.GenGoto(aux.getV());
+                                                Generator.GenLabel(c.getF()); :}
+            | prFor:aux AP exp:e1             {:Generator.GenLabel(aux.getV()); :}
+              PYC cond:c                      {:Generator.GenLabel(aux.getF()); :}
+              PYC exp:e2 CP                   {:Generator.GenGoto(aux.getV());
+                                                Generator.GenLabel(c.getV()); :}
+              sent                            {:Generator.GenGoto(aux.getF());
+                                                Generator.GenLabel(c.getF()); :}
+            | prFor:aux exp:e1 TO  exp:e2
+              prStep:step prDo:aux2           {:Generator.GenLabel(aux.getV());
+                                                Generator.GenCondForDownTo(e1,e2,aux2,false);
+                                                Generator.GenLabel(aux.getF());
+                                                Generator.GenBinOper(e1,Generator.MAS,step,e1);
+                                                Generator.GenGoto(aux.getV());
+                                                Generator.GenLabel(aux2.getV()); :}
+              ALL sent CLL                    {:Generator.GenGoto(aux.getF());
+                                                Generator.GenLabel(aux2.getF()); :}
+            | prFor:aux exp:e1 DOWNTO exp:e2
+              prStep:step prDo:aux2           {:Generator.GenLabel(aux.getV());
+                                                Generator.GenCondForDownTo(e1,e2,aux2,true);
+                                                Generator.GenLabel(aux.getF());
+                                                Generator.GenBinOper(e1,Generator.MENOS,step,e1);
+                                                Generator.GenGoto(aux.getV());
+                                                Generator.GenLabel(aux2.getV()); :}
+              ALL sent CLL                     {:Generator.GenGoto(aux.getF());
+                                                 Generator.GenLabel(aux2.getF()); :}
+            ;
+
+part_else   ::= ELSE sent
+            |
+            ;
+
+prWhile     ::= WHILE                           {:RESULT=new DoubleTag(); :}
+            ;
+
+prDo        ::= DO                              {:RESULT=new DoubleTag(); :}
+            ;
+
+prFor       ::= FOR                             {:RESULT=new DoubleTag(); :}
+            ;
+
+prStep      ::= STEP exp:e                      {:RESULT=e; :}
+            |                                   {:RESULT="1"; :}
+            ;
+
+
+List_var_dec    ::= type:tp                     {:TS.auxType=tp; :}
+                    variable
+                  | List_var_dec COMA variable
+            ;
+
+variable    ::= IDENT:id                         {:if(TS.isDeclared(id,true)){
+                                                   TS.error(1);
+                                                   System.exit(0);
+                                                   }else{
+                                                     TS.add(id,TS.auxType);
+                                                     RESULT=id;
+                                                   } :}
+            | IDENT:id ASIG exp:e               {:if(TS.isDeclared(id,true)){
+                                                    TS.error(1);
+                                                    System.exit(0);
+                                                    }else{
+                                                      TS.add(id,TS.auxType);
+                                                      RESULT=Generator.GenAsig(TS.varBlock(id),e);
+                                                    }  :}
+            ;
+
+type        ::= INT                             {:RESULT="INTEGER"; :}
+            ;
+
+exp         ::= exp:e1 MAS exp:e2               {:String temp = Generator.newTag();
+                                                  Generator.GenBinOper(e1,Generator.MAS,e2,temp);
+                                                  RESULT=temp; :}
+            | exp:e1 MENOS exp:e2               {:String temp = Generator.newTag();
+                                                  Generator.GenBinOper(e1,Generator.MENOS,e2,temp);
+                                                  RESULT=temp; :}
+            | exp:e1 POR exp:e2                 {:String temp = Generator.newTag();
+                                                  Generator.GenBinOper(e1,Generator.POR,e2,temp);
+                                                  RESULT=temp; :}
+            | exp:e1 DIV exp:e2                 {:String temp = Generator.newTag();
+                                                  Generator.GenBinOper(e1,Generator.DIV,e2,temp);
+                                                  RESULT=temp; :}
+            | exp:e1 MOD exp:e2                 {:String temp = Generator.newTag();
+                                                  RESULT=Generator.GenBinOper(e1,Generator.MOD,e2,temp); :}
+            | MENOS exp:e                       {:String temp = Generator.newTag();
+                                                  Generator.GenBinOper(null,Generator.MENOSUNARIO,e,temp);
+                                                  RESULT=temp; :}%prec MENOSUNARIO
+            | idExp:id ASIG exp:e               {:RESULT=Generator.GenAsig(TS.varBlock(id),e); :}
+            | AP exp:e CP                       {:RESULT=e; :}
+            | idExp:id                          {:RESULT=id; :}
+            | MASMAS idExp:id                   {:RESULT=Generator.GenIncDec(TS.varBlock(id),true,true); :}
+            | idExp:id MASMAS                   {:RESULT=Generator.GenIncDec(TS.varBlock(id),false,true); :}
+            | MENOSMENOS idExp:id               {:RESULT=Generator.GenIncDec(TS.varBlock(id),true,false); :}
+            | idExp:id MENOSMENOS               {:RESULT=Generator.GenIncDec(TS.varBlock(id),false,false); :}
+            | NUM:n                             {:RESULT=n; :}
+            ;
+
+idExp       ::= IDENT:id                          {:if(!TS.isDeclared(id,false)){
+                                                    TS.error(2);
+                                                    System.exit(0);
+                                                    }else{
+                                                      RESULT=TS.varBlock(id);
+                                                  } :}
+            ;
+
+cond        ::= exp:e1 LT exp:e2                {:RESULT=Generator.GenCond(e1,Generator.LT,e2); :}
+            | exp:e1 LEQ exp:e2                 {:RESULT=Generator.GenCond(e1,Generator.LEQ,e2); :}
+            | exp:e1 EQ exp:e2                  {:RESULT=Generator.GenCond(e1,Generator.EQ,e2); :}
+            | exp:e1 GEQ exp:e2                 {:RESULT=Generator.GenCond(e1,Generator.GEQ,e2); :}
+            | exp:e1 GT exp:e2                  {:RESULT=Generator.GenCond(e1,Generator.GT,e2); :}
+            | exp:e1 NEQ exp:e2                 {:RESULT=Generator.GenCond(e1,Generator.NEQ,e2); :}
+            | NOT cond:c                        {:String aux = c.getV();
+                                                  c.setV(c.getF());
+                                                  c.setF(aux);
+                                                  RESULT=c; :}
+            | cond:c1 AND                       {:Generator.GenLabel(c1.getV()); :}
+              cond:c2                           {:Generator.GenLabel(c1.getF());
+                                                  Generator.GenGoto(c2.getF());
+                                                  RESULT=c2; :}
+            | cond:c1 OR                        {:Generator.GenLabel(c1.getF()); :}
+              cond:c2                           {:Generator.GenLabel(c1.getV());
+                                                  Generator.GenGoto(c2.getV());
+                                                  RESULT=c2; :}
+            | AP cond:c CP                      {:RESULT=c; :}
+            ;

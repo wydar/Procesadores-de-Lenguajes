@@ -1,0 +1,101 @@
+import java_cup.runtime.*;
+
+//Terminales
+terminal PRINT, WHILE, ASIG, DP, IF, ELIF, ELSE, FOR, IN, RANGE;
+terminal AP, CP, COMA;
+terminal MAS, MENOS, POR, DIV, MOD, POT, MENOSUNARIO;
+terminal LT, LEQ, GT, GEQ, EQ, NEQ;
+terminal String IDENT, NUM;
+
+//No Terminales
+non terminal String List_sent, sent, exp, bin_op, sent_if, sent_while, sent_for;
+non terminal DoubleTag cond, prElif, prElse, prWhile, prFOR, prComa;
+
+//Precedencias
+precedence left MAS, MENOS;
+precedence left MOD, DIV, POR, POT;
+precedence left MENOSUNARIO;
+precedence left IF, ELIF, ELSE;
+
+//Gramatcia
+List_sent   ::= List_sent sent
+            | sent
+            ;
+
+sent        ::= PRINT exp:e             {:Generator.GenPrint(e); :}
+            | sent_if
+            | exp
+            | sent_while
+            | sent_for
+            ;
+
+exp         ::= IDENT:id                {:RESULT=id; :}
+            | NUM:n                     {:RESULT=n; :}
+            | AP exp:e CP               {:RESULT=e; :}
+            | bin_op:op                 {:RESULT=op; :}
+            | exp:e MENOSUNARIO         {:RESULT=Generator.GenBinOp(null,Generator.MUNARIO,e); :}%prec MENOSUNARIO
+            | IDENT:id ASIG exp:e       {:RESULT=Generator.GenAsig(id,e); :}
+            ;
+
+bin_op      ::= exp:e1 MAS exp:e2       {:RESULT=Generator.GenBinOp(e1,Generator.MAS,e2); :}
+            | exp:e1 MENOS exp:e2       {:RESULT=Generator.GenBinOp(e1,Generator.MENOS,e2); :}
+            | exp:e1 POR exp:e2         {:RESULT=Generator.GenBinOp(e1,Generator.POR,e2); :}
+            | exp:e1 DIV exp:e2         {:RESULT=Generator.GenBinOp(e1,Generator.DIV,e2); :}
+            | exp:e1 MOD exp:e2         {:RESULT=Generator.GenBinOp(e1,Generator.MOD,e2); :}
+            | exp:e1 POT exp:e2         {:RESULT=Generator.GenBinOp(e1,Generator.POT,e2); :}
+            ;
+
+cond        ::= exp:e1 LT exp:e2        {:RESULT=Generator.GenCond(e1,Generator.LT,e2,null); :}
+            | exp:e1 LEQ exp:e2         {:RESULT=Generator.GenCond(e1,Generator.LEQ,e2,null); :}
+            | exp:e1 EQ exp:e2          {:RESULT=Generator.GenCond(e1,Generator.EQ,e2,null); :}
+            | exp:e1 GEQ exp:e2         {:RESULT=Generator.GenCond(e1,Generator.GEQ,e2,null); :}
+            | exp:e1 GT exp:e2          {:RESULT=Generator.GenCond(e1,Generator.GT,e2,null); :}
+            | exp:e1 NEQ exp:e2         {:RESULT=Generator.GenCond(e1,Generator.NEQ,e2,null); :}
+            | AP cond:c CP              {:RESULT=c; :}
+            ;
+
+sent_if     ::= IF cond:c DP            {:Generator.GenLabel(c.getV()); :}
+                sent                    {:c.setV(c.getF());
+                                          c.setF(DoubleTag.newTag());
+                                          Generator.GenGoto(c.getF());
+                                          Generator.GenLabel(c.getV()); :}
+                prElif prElse           {:Generator.GenLabel(c.getF()); :}
+            ;
+
+prElif      ::= ELIF cond:c DP          {:Generator.GenLabel(c.getV()); :}
+                sent                    {:c.setV(c.getF());
+                                          c.setF(DoubleTag.newTag());
+                                          Generator.GenGoto(c.getF());
+                                          Generator.GenLabel(c.getV()); :}
+                prElif   prElse         {:Generator.GenLabel(c.getF()); :}
+            |
+            ;
+
+prElse      ::= ELSE DP sent
+            |
+            ;
+
+sent_while  ::= prWhile:aux             {:Generator.GenLabel(aux.getV()); :}
+                cond:c DP               {:Generator.GenLabel(c.getV()); :}
+                sent                    {:Generator.GenGoto(aux.getV());
+                                          Generator.GenLabel(c.getF()); :}
+            ;
+
+prWhile     ::= WHILE                   {:RESULT=new DoubleTag(); :}
+            ;
+
+sent_for    ::= prFOR:aux IDENT:id
+                IN RANGE AP NUM:n1      {:Generator.GenAsig(id,n1);
+                                          Generator.GenLabel(aux.getV()); :}
+                prComa:c NUM:n2 CP DP   {:Generator.GenCond(id,Generator.LT,n2,c);
+                                          Generator.GenLabel(c.getV()); :}
+                sent                    {:PYPLC.out.println("   "+id+" = "+id+" + 1;");
+                                          Generator.GenGoto(aux.getV());
+                                          Generator.GenLabel(c.getF()); :}
+            ;
+
+prFOR       ::= FOR                     {:RESULT=new DoubleTag(); :}
+            ;
+
+prComa      ::= COMA                    {:RESULT=new DoubleTag(); :}
+            ;

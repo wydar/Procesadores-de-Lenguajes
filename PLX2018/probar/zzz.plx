@@ -1,0 +1,2 @@
+print('\i');
+print('n');

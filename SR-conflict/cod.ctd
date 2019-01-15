@@ -1,0 +1,29 @@
+   if(a == 0) goto L0;
+   goto L1;
+L0:
+   if(b < a) goto L3;
+   goto L2;
+L2:
+   $t0 = a * b;
+   if(c < $t0) goto L5;
+   goto L4;
+L4:
+   print c;
+   goto L6;
+L5:
+L6:
+   goto L7;
+L3:
+L7:
+   $t1 = -1;
+   a = $t1;
+   $t2 = -1;
+   b = $t2;
+   $t3 = -1;
+   c = $t3;
+   goto L8;
+L1:
+L8:
+   $t4 = a * b;
+   $t5 = $t4 * c;
+   print $t5;

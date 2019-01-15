@@ -1,0 +1,27 @@
+   if (alfa == 0) goto L0;
+   goto L1;
+L0:
+   alfa_2 = 12;
+   $t0 = alfa_2 / 2;
+   $t1 = $t0 * 2;
+   $t2 = alfa_2 - $t1;
+   if ($t2 == 0) goto L3;
+   goto L4;
+L3:
+   alfa_2 = alfa_2 + 1;
+   print alfa_2;
+   alfa_3 = 7;
+   print alfa_3;
+   goto L5;
+L4:
+   print alfa_2;
+L5:
+   $t3 = alfa_2;
+   alfa_2 = alfa_2 + 1;
+   print $t3;
+   goto L2;
+L1:
+L2:
+   $t4 = alfa;
+   alfa = alfa + 1;
+   print $t4;

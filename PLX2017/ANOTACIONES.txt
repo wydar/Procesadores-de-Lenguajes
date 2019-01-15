@@ -1,0 +1,3 @@
+-La sentencia: switch no funciona del todo (falta mucho de esta parte)
+-Los punteros: no detecta el error cuando hace una operacion aritmetica con ellos
+El resto funciona todo :)

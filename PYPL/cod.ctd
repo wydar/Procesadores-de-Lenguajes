@@ -1,0 +1,26 @@
+   a = 20;
+   if (a < 22) goto l1;
+   goto l0;
+l0:
+   $t0 = a - 22;
+   print $t0;
+   goto l2;
+l1:
+   if (a < 21) goto l4;
+   goto l3;
+l3:
+   $t1 = a - 21;
+   print $t1;
+   goto l5;
+l4:
+   if (a < 10) goto l7;
+   goto l6;
+l6:
+   $t2 = a - 10;
+   print $t2;
+   goto l8;
+l7:
+   print a;
+l8:
+l5:
+l2:

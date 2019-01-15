@@ -1,0 +1,3 @@
+-No funciona el casting explicito
+-bucle for...in: no me ha dado la gana de hacerlo
+El resto funciona todo :)
